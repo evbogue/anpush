@@ -3,6 +3,7 @@ const latestEl = document.getElementById("latest");
 const subscribeBtn = document.getElementById("subscribe");
 const unsubscribeBtn = document.getElementById("unsubscribe");
 const pollBtn = document.getElementById("poll");
+const pushLatestBtn = document.getElementById("push-latest");
 
 function setStatus(text) {
   statusEl.textContent = `Status: ${text}`;
@@ -62,6 +63,18 @@ async function pollNow() {
     setStatus("poll sent notification");
   } else {
     setStatus(data.reason || "no new messages");
+  }
+}
+
+async function pushLatest() {
+  const res = await fetch("/push-latest", { method: "POST" });
+  if (!res.ok) throw new Error("Push latest failed");
+  const data = await res.json();
+  setLatest(data.latest);
+  if (data.sent) {
+    setStatus("sent latest notification");
+  } else {
+    setStatus(data.reason || "push failed");
   }
 }
 
@@ -141,6 +154,13 @@ pollBtn.addEventListener("click", () => {
   pollNow().catch((err) => {
     console.error(err);
     setStatus("poll failed");
+  });
+});
+
+pushLatestBtn.addEventListener("click", () => {
+  pushLatest().catch((err) => {
+    console.error(err);
+    setStatus("push latest failed");
   });
 });
 

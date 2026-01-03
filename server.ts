@@ -1,6 +1,7 @@
 import webpush from "npm:web-push@3.6.7";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { serveDir } from "https://deno.land/std@0.224.0/http/file_server.ts";
+import { apds } from "https://esm.sh/gh/evbogue/apds@d9326cb/apds.js";
 import {
   ensureVapidConfig,
   type VapidConfig,
@@ -83,7 +84,32 @@ async function hashText(text: string): Promise<string> {
   return out;
 }
 
-function toPushPayload(latest: unknown) {
+async function parsePostYaml(text: string): Promise<{ name?: string; body?: string }> {
+  try {
+    const parsed = await apds.parseYaml(text);
+    if (parsed && typeof parsed === "object") {
+      const attrs = parsed as Record<string, unknown>;
+      const name = typeof attrs.name === "string" ? attrs.name.trim() : undefined;
+      const body = typeof attrs.body === "string" ? attrs.body.trim() : undefined;
+      return { name: name || undefined, body: body || undefined };
+    }
+  } catch {
+    // Fall back to defaults if YAML parsing fails.
+  }
+  return {};
+}
+
+function formatPushTitle(name?: string) {
+  if (name) return `New Wiredove Message from ${name}`;
+  return "New anproto message";
+}
+
+function formatPushBody(body?: string) {
+  if (body && body.trim()) return body.trim();
+  return "Tap to view the latest update";
+}
+
+async function toPushPayload(latest: unknown) {
   const record = latest && typeof latest === "object"
     ? (latest as Record<string, unknown>)
     : null;
@@ -91,16 +117,20 @@ function toPushPayload(latest: unknown) {
   const targetUrl = hash
     ? `https://wiredove.net/#${hash}`
     : "https://wiredove.net/";
+  const rawText = record && typeof record.text === "string" ? record.text : "";
+  const parsed = rawText ? await parsePostYaml(rawText) : {};
+  const title = formatPushTitle(parsed.name);
+  const body = formatPushBody(parsed.body);
   return JSON.stringify({
-    title: "New anproto message",
-    body: "Tap to view the latest update",
+    title,
+    body,
     url: targetUrl,
     hash,
     latest,
   });
 }
 
-async function pollLatest(): Promise<{
+async function pollLatest(force = false): Promise<{
   changed: boolean;
   sent: boolean;
   reason?: string;
@@ -157,7 +187,7 @@ async function pollLatest(): Promise<{
       ? latestId !== state.lastSeenId
       : latestHash !== state.lastSeenHash;
 
-    if (!isNew) {
+    if (!isNew && !force) {
       return {
         changed: false,
         sent: false,
@@ -166,10 +196,12 @@ async function pollLatest(): Promise<{
       };
     }
 
-    await saveState({
-      lastSeenId: latestId || undefined,
-      lastSeenHash: latestHash || undefined,
-    });
+    if (isNew) {
+      await saveState({
+        lastSeenId: latestId || undefined,
+        lastSeenHash: latestHash || undefined,
+      });
+    }
 
     const subs = await loadSubscriptions();
     if (subs.length === 0) {
@@ -181,7 +213,7 @@ async function pollLatest(): Promise<{
       };
     }
 
-    const payload = toPushPayload(latestRecord ?? latestJson);
+    const payload = await toPushPayload(latestRecord ?? latestJson);
     const now = new Date().toISOString();
     const nextSubs: Subscription[] = [];
 
@@ -297,6 +329,11 @@ const server = serve(async (req) => {
 
   if (req.method === "POST" && url.pathname === "/poll-now") {
     const result = await pollLatest();
+    return jsonResponse(result);
+  }
+
+  if (req.method === "POST" && url.pathname === "/push-latest") {
+    const result = await pollLatest(true);
     return jsonResponse(result);
   }
 
