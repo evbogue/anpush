@@ -16,6 +16,7 @@ const SUBS_FILE = `${DATA_DIR}/subscriptions.json`;
 const STATE_FILE = `${DATA_DIR}/state.json`;
 const CONFIG_FILE = "./config.json";
 const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") ?? "mailto:ops@wiredove.net";
+const PUSH_ICON_URL = Deno.env.get("PUSH_ICON_URL") ?? "https://wiredove.net/dovepurple_sm.png";
 await Deno.mkdir(DATA_DIR, { recursive: true });
 
 type Subscription = {
@@ -126,6 +127,7 @@ async function toPushPayload(latest: unknown) {
     body,
     url: targetUrl,
     hash,
+    icon: PUSH_ICON_URL,
     latest,
   });
 }
