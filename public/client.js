@@ -1,9 +1,15 @@
+import { notificationsButton } from "/notifications_button.js";
+
 const statusEl = document.getElementById("status");
 const latestEl = document.getElementById("latest");
-const subscribeBtn = document.getElementById("subscribe");
-const unsubscribeBtn = document.getElementById("unsubscribe");
 const pollBtn = document.getElementById("poll");
 const pushLatestBtn = document.getElementById("push-latest");
+const toggleBtn = document.getElementById("toggle-notifications");
+let moduleLink = null;
+
+function setButtonTitle(button, text) {
+  button.title = text;
+}
 
 function setStatus(text) {
   statusEl.textContent = `Status: ${text}`;
@@ -22,19 +28,25 @@ function setLatest(data) {
   ].join("\n") + text;
 }
 
-function updateButtons(enabled) {
-  if (enabled) {
-    subscribeBtn.textContent = "Notifications enabled";
-    subscribeBtn.disabled = true;
-    unsubscribeBtn.textContent = "Disable notifications";
-    unsubscribeBtn.disabled = false;
-  } else {
-    subscribeBtn.textContent = "Enable notifications";
-    subscribeBtn.disabled = false;
-    unsubscribeBtn.textContent = "Notifications disabled";
-    unsubscribeBtn.disabled = true;
-  }
+function updateToggle(enabled) {
+  toggleBtn.dataset.enabled = enabled ? "true" : "false";
+  toggleBtn.querySelector(".material-symbols-outlined").textContent = enabled
+    ? "notifications_active"
+    : "notifications";
+  setButtonTitle(toggleBtn, enabled ? "Turn off notifications" : "Turn on notifications");
 }
+
+function mountModuleLink() {
+  const mount = document.getElementById("toggle-module");
+  if (!mount) return;
+  moduleLink = notificationsButton({
+    onStatus: setStatus,
+    onToggle: (enabled) => updateToggle(enabled),
+  });
+  mount.appendChild(moduleLink);
+}
+
+mountModuleLink();
 
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -86,6 +98,15 @@ async function ensureServiceWorker() {
   return registration;
 }
 
+async function showLocalNotification(title, body) {
+  if (!("Notification" in window) || Notification.permission !== "granted") {
+    return;
+  }
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (!registration) return;
+  await registration.showNotification(title, { body, icon: "/favicon.ico" });
+}
+
 async function subscribe() {
   setStatus("requesting permission");
   const permission = await Notification.requestPermission();
@@ -109,7 +130,12 @@ async function subscribe() {
 
   if (!res.ok) throw new Error("Subscribe failed");
   setStatus("subscribed");
-  updateButtons(true);
+  updateToggle(true);
+  moduleLink?.refresh?.();
+  await showLocalNotification(
+    "Welcome to Wiredove",
+    "Your notifications are on.",
+  );
 }
 
 async function unsubscribe() {
@@ -133,20 +159,20 @@ async function unsubscribe() {
   });
 
   setStatus("unsubscribed");
-  updateButtons(false);
+  updateToggle(false);
+  moduleLink?.refresh?.();
+  await showLocalNotification(
+    "Goodbye from Wiredove!",
+    "Your notifications are off.",
+  );
 }
 
-subscribeBtn.addEventListener("click", () => {
-  subscribe().catch((err) => {
+toggleBtn.addEventListener("click", () => {
+  const enabled = toggleBtn.dataset.enabled === "true";
+  const action = enabled ? unsubscribe : subscribe;
+  action().catch((err) => {
     console.error(err);
-    setStatus("subscribe failed");
-  });
-});
-
-unsubscribeBtn.addEventListener("click", () => {
-  unsubscribe().catch((err) => {
-    console.error(err);
-    setStatus("unsubscribe failed");
+    setStatus(enabled ? "unsubscribe failed" : "subscribe failed");
   });
 });
 
@@ -167,7 +193,7 @@ pushLatestBtn.addEventListener("click", () => {
 async function refreshSubscriptionState() {
   if (!("serviceWorker" in navigator)) {
     setStatus("service worker not supported");
-    updateButtons(false);
+    updateToggle(false);
     return;
   }
 
@@ -178,15 +204,17 @@ async function refreshSubscriptionState() {
 
   if (subscription) {
     setStatus("subscribed");
-    updateButtons(true);
+    updateToggle(true);
   } else {
     setStatus("not subscribed");
-    updateButtons(false);
+    updateToggle(false);
   }
+
+  moduleLink?.refresh?.();
 }
 
 refreshSubscriptionState().catch((err) => {
   console.error(err);
   setStatus("idle");
-  updateButtons(false);
+  updateToggle(false);
 });
