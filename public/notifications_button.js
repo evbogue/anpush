@@ -35,9 +35,12 @@ async function showLocalNotification(title, body, iconUrl) {
 
 export function notificationsButton(options = {}) {
   const {
+    wrapperClassName = "notifications-widget",
     className = "notifications-link",
     iconOn = "notifications_active",
     iconOff = "notifications",
+    labelOn = "Notifications on",
+    labelOff = "Notifications off",
     titleOn = "Turn off notifications",
     titleOff = "Turn on notifications",
     serviceWorkerUrl = "/sw.js",
@@ -49,32 +52,55 @@ export function notificationsButton(options = {}) {
     welcomeBody = "Your notifications are on.",
     goodbyeTitle = "Goodbye from Wiredove!",
     goodbyeBody = "Your notifications are off.",
+    showStatus = true,
+    statusClassName = "notifications-status",
+    statusIdle = "idle",
     onStatus,
     onToggle,
   } = options;
 
-  const link = document.createElement("a");
-  link.href = "#";
-  link.className = className;
-  link.title = titleOff;
-  link.setAttribute("aria-label", titleOff);
+  const wrapper = document.createElement("div");
+  wrapper.className = wrapperClassName;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = className;
+  button.title = titleOff;
+  button.setAttribute("aria-label", titleOff);
 
   const icon = document.createElement("span");
   icon.className = "material-symbols-outlined";
   icon.setAttribute("aria-hidden", "true");
   icon.textContent = iconOff;
-  link.appendChild(icon);
+
+  const label = document.createElement("span");
+  label.className = "notifications-label";
+  label.textContent = labelOff;
+
+  button.appendChild(icon);
+  button.appendChild(label);
+  wrapper.appendChild(button);
+
+  const statusEl = showStatus ? document.createElement("span") : null;
+  if (statusEl) {
+    statusEl.className = statusClassName;
+    statusEl.setAttribute("aria-live", "polite");
+    statusEl.textContent = statusIdle;
+    wrapper.appendChild(statusEl);
+  }
 
   function setStatus(text) {
+    if (statusEl) statusEl.textContent = text;
     if (onStatus) onStatus(text);
   }
 
   function setState(enabled) {
-    link.dataset.enabled = enabled ? "true" : "false";
+    button.dataset.enabled = enabled ? "true" : "false";
     icon.textContent = enabled ? iconOn : iconOff;
+    label.textContent = enabled ? labelOn : labelOff;
     const title = enabled ? titleOn : titleOff;
-    link.title = title;
-    link.setAttribute("aria-label", title);
+    button.title = title;
+    button.setAttribute("aria-label", title);
     if (onToggle) onToggle(enabled);
   }
 
@@ -143,9 +169,9 @@ export function notificationsButton(options = {}) {
     setState(!!subscription);
   }
 
-  link.addEventListener("click", (event) => {
+  button.addEventListener("click", (event) => {
     event.preventDefault();
-    const enabled = link.dataset.enabled === "true";
+    const enabled = button.dataset.enabled === "true";
     const action = enabled ? unsubscribe : subscribe;
     action().catch((err) => {
       console.error(err);
@@ -153,7 +179,8 @@ export function notificationsButton(options = {}) {
     });
   });
 
-  link.refresh = refresh;
+  wrapper.refresh = refresh;
+  button.refresh = refresh;
   refresh().catch(() => setState(false));
-  return link;
+  return wrapper;
 }

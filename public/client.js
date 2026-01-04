@@ -1,3 +1,4 @@
+import { h } from "https://esm.sh/gh/evbogue/apds@d9326cb/lib/h.js";
 import { notificationsButton } from "/notifications_button.js";
 
 const statusEl = document.getElementById("status");
@@ -40,10 +41,12 @@ function mountModuleLink() {
   const mount = document.getElementById("toggle-module");
   if (!mount) return;
   moduleLink = notificationsButton({
+    showStatus: false,
     onStatus: setStatus,
     onToggle: (enabled) => updateToggle(enabled),
   });
-  mount.appendChild(moduleLink);
+  const view = h("div", [moduleLink]);
+  mount.appendChild(view);
 }
 
 mountModuleLink();
